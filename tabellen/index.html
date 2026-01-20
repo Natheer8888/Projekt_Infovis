@@ -1,0 +1,1638 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pima Indians Diabetes - ML Visualisierungs-Dashboard</title>
+    
+    <!-- D3.js & CSV Loader -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://d3js.org/d3-dsv.v3.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-array@3"></script>
+    <script src="https://cdn.jsdelivr.net/npm/d3-scale-chromatic@3"></script>
+    
+    <style>
+        :root {
+            --color-primary: #2152A0;
+            --color-secondary: #00B4D8;
+            --color-success: #00D99D;
+            --color-warning: #FFA500;
+            --color-danger: #E94560;
+            --color-bg: #F5F7FA;
+            --color-text: #1F2937;
+            --color-border: #E5E7EB;
+        }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, sans-serif; 
+            background: var(--color-bg); 
+            color: var(--color-text); 
+            line-height: 1.6;
+        }
+        
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        
+        header { 
+            background: linear-gradient(135deg, var(--color-primary) 0%, var(--color-secondary) 100%); 
+            color: white; 
+            padding: 30px 0; 
+            margin-bottom: 30px; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        
+        header h1 { font-size: 2.5em; margin-bottom: 10px; }
+        header p { font-size: 1.1em; opacity: 0.95; }
+        
+        .stats-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); 
+            gap: 20px; 
+            margin-bottom: 30px; 
+        }
+        
+        .stat-card { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+            border-left: 4px solid var(--color-primary);
+            text-align: center;
+        }
+        .stat-card.success { border-left-color: var(--color-success); }
+        .stat-card.danger { border-left-color: var(--color-danger); }
+        .stat-value { font-size: 2em; font-weight: bold; color: var(--color-primary); margin-bottom: 5px; }
+        .stat-label { font-size: 0.9em; color: #6B7280; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .charts-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(500px, 620px)); 
+            justify-items: center;
+            gap: 20px; 
+            margin-bottom: 30px; 
+        }
+        
+        .chart-container { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+            height: 600px; 
+        }
+        .chart-container:not(.full-width) { width: 100%; }
+        .chart-container:not(.full-width) { display: flex; flex-direction: column; align-items: center; }
+        .chart-container:not(.full-width) .chart-title { width: 100%; }
+        .chart-title { 
+            font-size: 1.2em; 
+            font-weight: 600; 
+            margin-bottom: 15px; 
+            color: var(--color-text); 
+            text-align: center;
+        }
+        .full-width { grid-column: 1 / -1; }
+        .comparison-container { height: auto; }
+        .dist-grid { display: grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap: 16px; }
+        .dist-card { border: 1px solid var(--color-border); border-radius: 8px; padding: 10px; background: #fff; }
+        .dist-title { font-size: 0.9em; font-weight: 600; text-align: center; margin-bottom: 6px; color: var(--color-text); }
+        .dist-card svg { width: 100%; height: 200px; }
+        .dist-card.empty { visibility: hidden; }
+        .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.6); display: none; align-items: center; justify-content: center; z-index: 1000; }
+        .modal-overlay.active { display: flex; }
+        .modal-content { background: #fff; width: min(92vw, 1100px); height: min(85vh, 720px); border-radius: 12px; box-shadow: 0 20px 50px rgba(0,0,0,0.25); position: relative; padding: 20px 24px 24px; }
+        .modal-title { text-align: center; font-size: 1.2em; font-weight: 600; margin-bottom: 8px; color: var(--color-text); }
+        .modal-close { position: absolute; top: 10px; right: 12px; width: 32px; height: 32px; border: none; border-radius: 50%; background: #f3f4f6; color: #111827; font-size: 18px; cursor: pointer; }
+        .modal-close:hover { background: #e5e7eb; }
+        .modal-chart { width: 100%; height: calc(100% - 36px); }
+        .modal-chart svg { width: 100%; height: 100%; }
+        .cluster-modal-content { width: min(80vw, 720px); height: auto; max-height: 80vh; overflow: auto; }
+        .cluster-note { font-size: 0.9em; color: #4b5563; text-align: center; margin: 4px 0 10px; }
+        .cluster-profile { width: 100%; margin: 0 auto; font-size: 12px; color: #111827; }
+        .cluster-profile table { width: 100%; border-collapse: collapse; }
+        .cluster-profile th, .cluster-profile td { padding: 6px 8px; border-bottom: 1px solid var(--color-border); text-align: left; }
+        .cluster-profile th { font-weight: 600; color: #111827; background: #f9fafb; }
+        .cluster-explainer { font-size: 12px; color: #4b5563; margin-top: 10px; line-height: 1.4; }
+        .baseline-metrics { margin-top: 0; font-size: 12px; color: #111827; }
+        .baseline-report { background: #f9fafb; border: 1px solid var(--color-border); border-radius: 10px; padding: 14px; font-variant-numeric: tabular-nums; }
+        .baseline-title { font-weight: 600; color: #111827; margin-bottom: 8px; }
+        .baseline-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        .baseline-table th { text-align: right; color: #6b7280; font-weight: 600; padding: 4px 6px; border-bottom: 1px solid var(--color-border); }
+        .baseline-table th:first-child { text-align: left; }
+        .baseline-table td { padding: 4px 6px; border-bottom: 1px solid #eef2f7; text-align: right; }
+        .baseline-table td:first-child { text-align: left; font-weight: 600; color: #111827; }
+        .baseline-table tr:last-child td { border-bottom: none; }
+        .baseline-highlight td { background: #eef2ff; }
+        .baseline-meta { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 10px; }
+        .baseline-chip { background: #fff; border: 1px solid var(--color-border); border-radius: 8px; padding: 6px 8px; display: flex; justify-content: space-between; font-size: 12px; }
+        .baseline-chip span { color: #6b7280; }
+        .confusion-layout { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(380px, 1.2fr); gap: 16px; align-items: center; }
+        .confusion-right svg { width: 100%; height: 420px; }
+        
+        .insights { 
+            background: white; 
+            padding: 20px; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+            border-left: 4px solid var(--color-secondary);
+            grid-column: 1 / -1;
+        }
+        .insights h3 { margin-bottom: 15px; color: var(--color-primary); }
+        .insights ul { list-style-position: inside; color: #555; line-height: 1.8; }
+        
+        @media (max-width: 1024px) {
+            .charts-grid { grid-template-columns: 1fr; }
+            header h1 { font-size: 1.8em; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Pima Indians Diabetes ML Dashboard</h1>
+            <p>Machine Learning Visualisierungen | 768 Patienten | 8 Features</p>
+        </header>
+
+        <!-- Stats Cards -->
+        <div class="stats-grid" id="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="total-patients">-</div>
+                <div class="stat-label">Gesamte Patienten</div>
+            </div>
+            <div class="stat-card success">
+                <div class="stat-value" id="non-diabetic">-</div>
+                <div class="stat-label">Nicht-Diabetisch (65%)</div>
+            </div>
+            <div class="stat-card danger">
+                <div class="stat-value" id="diabetic">-</div>
+                <div class="stat-label">Diabetisch (35%)</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value">8</div>
+                <div class="stat-label">Predictive Features</div>
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="charts-grid">
+            <!-- Outcome Distribution -->
+            <div class="chart-container">
+                <div class="chart-title">Diabetes Outcome Verteilung</div>
+                <svg id="outcomeChart"></svg>
+            </div>
+
+            <!-- Age Distribution -->
+            <div class="chart-container">
+                <div class="chart-title">Age Verteilung (Diabetisch vs Nicht-Diabetisch)</div>
+                <svg id="ageChart"></svg>
+            </div>
+
+            
+            <!-- Feature Distributions -->
+            <div class="chart-container full-width comparison-container">
+                <div class="chart-title">Feature Distributionen</div>
+                <div class="dist-grid" id="distributionGrid"></div>
+            </div>
+
+            <!-- Correlation Heatmap -->
+
+            <div class="chart-container full-width">
+                <div class="chart-title">Feature Korrelationen mit Outcome</div>
+                <svg id="correlationChart"></svg>
+            </div>
+
+            <!-- PCA Clusters -->
+            <div class="chart-container">
+                <div class="chart-title">PCA Cluster Verteilung (PC1 vs PC2)</div>
+                <div class="cluster-note">Klicke auf einen Punkt, um das Cluster-Profil aus der Tabelle anzuzeigen.</div>
+                <svg id="pcaChart"></svg>
+            </div>
+
+            <!-- KMeans Metrics -->
+            <div class="chart-container">
+                <div class="chart-title">KMeans Elbow & Silhouette Score</div>
+                <svg id="kmeansChart"></svg>
+            </div>
+
+            <!-- Confusion Matrix -->
+            <div class="chart-container full-width">
+                <div class="chart-title">Random Forest Confusion Matrix</div>
+                <div class="confusion-layout">
+                    <div class="confusion-left">
+                        <div class="baseline-metrics" id="baselineMetrics"></div>
+                    </div>
+                    <div class="confusion-right">
+                        <svg id="confusionChart"></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="modal-overlay" id="pcaModal">
+            <div class="modal-content">
+                <button class="modal-close" type="button" aria-label="Schliessen" id="pcaModalClose">&times;</button>
+                <div class="modal-title" id="pcaModalTitle">PCA Cluster Verteilung (PC1 vs PC2)</div>
+                <div class="modal-chart">
+                    <svg id="pcaChartModal"></svg>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-overlay" id="clusterModal">
+            <div class="modal-content cluster-modal-content">
+                <button class="modal-close" type="button" aria-label="Schliessen" id="clusterModalClose">&times;</button>
+                <div class="modal-title" id="clusterModalTitle">Cluster Profil</div>
+                <div class="cluster-profile" id="clusterProfile"></div>
+                <div class="cluster-explainer" id="clusterExplainer"></div>
+            </div>
+        </div>
+
+        <!-- Key Insights -->
+
+        <div class="insights">
+            <h3>Wichtigste Erkenntnisse für ML</h3>
+            <ul id="insights-list">
+                <li><strong>Glucose</strong>: Stärkster Prädiktor (Korrelation 0.47) – Essentiell für Modelle</li>
+                <li><strong>BMI</strong>: Zweiter Faktor (Korrelation 0.29) – Hohe BMI-Werte erhöhen Risiko</li>
+                <li><strong>Age</strong>: Moderate Korrelation (0.24) – Ältere Patienten gefährdeter</li>
+                <li><strong>Klassen-Imbalance</strong>: 65% vs 35% – SMOTE/Class Weights bei Training nutzen</li>
+                <li><strong>PCA</strong>: PC1 erklärt ~45% Varianz – Reduktion auf 2-3 Komponenten möglich</li>
+                <li><strong>Random Forest</strong>: Hohe Accuracy durch Ensemble-Methode – Feature Importance visualisieren</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Daten laden und Visualisierungen initialisieren
+        async function loadData() {
+            try {
+                // CSV Dateien laden (alle vorhandenen Dateien)
+                const [diabetesData, outcomeData, avgGlucose, avgBmi, rfMetrics, 
+                       kmeansMetrics, confusionData, baselineData, pcaClusters, pcaVariance, pcaOutcomeData, 
+                       clusterProfileData,
+                       clusterFeatures, distributions, ageOutcome, featureMeans, 
+                       correlationData] = await Promise.all([
+                    d3.csv('tabellen/diabetes.csv'),
+                    d3.csv('tabellen/table_outcome.csv'),
+                    d3.csv('tabellen/table_avg_glucose.csv'),
+                    d3.csv('tabellen/table_avg_bmi.csv'),
+                    d3.csv('tabellen/table_rf_metrics.csv'),
+                    d3.csv('tabellen/table_kmeans_metrics.csv'),
+                    d3.csv('tabellen/table_confusion_matrix.csv'),
+                    d3.csv('tabellen/baseline_modell_ohne_cluster.csv'),
+                    d3.csv('tabellen/table_pca_clusters.csv'),
+                    d3.csv('tabellen/table_pca_variance.csv'),
+                    d3.csv('tabellen/pca3_clusters_outcome.csv'),
+                    d3.csv('tabellen/cluster_profile.csv'),
+                    d3.csv('tabellen/table_cluster_features.csv'),
+                    d3.csv('tabellen/table_distributions.csv'),
+                    d3.csv('tabellen/table_age_outcome.csv'),
+                    d3.csv('tabellen/table_feature_mean.csv'),
+                    d3.csv('tabellen/table_correlation.csv')
+                ]);
+
+                // Stats aktualisieren
+                const total = diabetesData.length;
+                const diabeticCount = diabetesData.filter(d => d.Outcome === '1').length;
+                const nonDiabeticCount = total - diabeticCount;
+                
+                d3.select('#total-patients').text(total);
+                d3.select('#non-diabetic').text(nonDiabeticCount);
+                d3.select('#diabetic').text(diabeticCount);
+
+                // Features für Dropdown
+
+                const features = ['Glucose', 'BMI', 'Age', 'Pregnancies', 'BloodPressure', 'Insulin', 'SkinThickness'];
+                let pcaFilterOutcome = null;
+                const pcaModal = document.getElementById('pcaModal');
+                const pcaModalClose = document.getElementById('pcaModalClose');
+                const pcaModalTitle = document.getElementById('pcaModalTitle');
+                const clusterModal = document.getElementById('clusterModal');
+                const clusterModalClose = document.getElementById('clusterModalClose');
+
+                function openPCAModal() {
+                    if (!pcaModal) {
+                        return;
+                    }
+                    pcaModal.classList.add('active');
+                }
+
+                function closePCAModal() {
+                    if (!pcaModal) {
+                        return;
+                    }
+                    pcaModal.classList.remove('active');
+                }
+
+                if (pcaModalClose) {
+                    pcaModalClose.addEventListener('click', closePCAModal);
+                }
+                if (pcaModal) {
+                    pcaModal.addEventListener('click', (event) => {
+                        if (event.target === pcaModal) {
+                            closePCAModal();
+                        }
+                    });
+                }
+                if (clusterModalClose) {
+                    clusterModalClose.addEventListener('click', () => {
+                        clusterModal.classList.remove('active');
+                    });
+                }
+                if (clusterModal) {
+                    clusterModal.addEventListener('click', (event) => {
+                        if (event.target === clusterModal) {
+                            clusterModal.classList.remove('active');
+                        }
+                    });
+                }
+
+                // 1. Outcome Pie Chart
+                createPieChart('#outcomeChart', outcomeData, (outcome) => {
+                    const normalized = normalizeOutcome(outcome);
+                    pcaFilterOutcome = pcaFilterOutcome == normalized ? null : normalized;
+                    updatePCAScatter('#pcaChartModal', pcaFilterOutcome);
+                    if (pcaModalTitle) {
+                        const label = pcaFilterOutcome === '1' ? 'Diabetisch' : pcaFilterOutcome === '0' ? 'Nicht-Diabetisch' : 'Alle';
+                        pcaModalTitle.textContent = `PCA Cluster Verteilung (PC1 vs PC2) - ${label}`;
+                    }
+                    openPCAModal();
+                });
+                createAgeDistributionChart('#ageChart', diabetesData);
+                // 2. Feature Distributions
+                createFeatureDistributions('#distributionGrid', diabetesData, features);
+
+                // 3. Correlation Heatmap
+
+                createCorrelationHeatmap('#correlationChart', correlationData);
+                
+                // 4. PCA Clusters Scatter Plot
+                const pcaScatterData = pcaOutcomeData && pcaOutcomeData.length ? pcaOutcomeData : pcaClusters;
+                const clusterProfileMap = new Map((clusterProfileData || []).map(d => [String(d.Cluster), d]));
+                createPCAScatter('#pcaChart', pcaScatterData, pcaVariance, { 
+                    legendPosition: 'bottom',
+                    onClusterClick: (clusterId) => updateClusterProfile('#clusterProfile', '#clusterExplainer', '#clusterModal', clusterProfileMap, clusterId)
+                });
+                createPCAScatter('#pcaChartModal', pcaScatterData, pcaVariance, { width: 1000, height: 640, legendPosition: 'right' });
+                updatePCAScatter('#pcaChartModal', pcaFilterOutcome);
+                updateClusterProfile('#clusterProfile', '#clusterExplainer', '#clusterModal', clusterProfileMap, null);
+                
+                // 5. Confusion Matrix Heatmap
+                createConfusionMatrix('#confusionChart', confusionData);
+                createBaselineMetrics('#baselineMetrics', baselineData);
+                
+                // 6. KMeans Elbow Curve
+                createKMeansChart('#kmeansChart', kmeansMetrics);
+
+            } catch (error) {
+                console.error('Fehler beim Laden der Daten:', error);
+                document.body.innerHTML += '<div style="color:red;padding:20px;">Fehler: Bitte überprüfe CSV-Dateien</div>';
+            }
+        }
+
+      // 1. Pie Chart - Outcome Distribution mit Tooltip
+function createPieChart(selector, data, onSliceClick) {
+    const svg = d3.select(selector)
+        .attr('width', 450)
+        .attr('height', 400)
+        .style('font-family', 'Segoe UI, sans-serif');
+
+    const width = 450;
+    const height = 400;
+    const radius = Math.min(width, height) / 2 - 20;
+
+    const g = svg.append('g')
+        .attr('transform', `translate(${width / 2},${height / 2})`);
+
+    const total = d3.sum(data, d => +d.count);
+
+    const color = d3.scaleOrdinal()
+        .domain(['0', '1'])
+        .range(['var(--color-success)', 'var(--color-danger)']);
+
+    const arc = d3.arc()
+        .innerRadius(0)
+        .outerRadius(radius);
+
+    const arcHover = d3.arc()
+        .innerRadius(0)
+        .outerRadius(radius + 10);
+
+    const pie = d3.pie()
+        .value(d => +d.count)
+        .sort(null);
+
+    // Tooltip
+    const tooltip = d3.select('body')
+        .append('div')
+        .attr('class', 'tooltip')
+        .style('position', 'absolute')
+        .style('background', 'rgba(15,23,42,0.9)')
+        .style('color', '#fff')
+        .style('padding', '6px 10px')
+        .style('border-radius', '4px')
+        .style('font-size', '12px')
+        .style('pointer-events', 'none')
+        .style('opacity', 0);
+
+    const arcs = g.selectAll('.arc')
+        .data(pie(data))
+        .enter().append('g')
+        .attr('class', 'arc');
+
+    arcs.append('path')
+        .attr('d', arc)
+        .attr('fill', d => color(d.data.Outcome))
+        .attr('stroke', '#fff')
+        .attr('stroke-width', 2)
+        .on('mouseover', function (event, d) {
+            d3.select(this)
+                .transition().duration(150)
+                .attr('d', arcHover);
+
+            const share = (d.data.count * 100 / total).toFixed(1);
+            const label = d.data.Outcome === '0' ? 'Nicht-Diabetisch' : 'Diabetisch';
+
+            tooltip
+                .style('opacity', 1)
+                .html(
+                    `<strong>${label}</strong><br>` +
+                    `Anzahl: ${d.data.count}<br>` +
+                    `Anteil: ${share}%`
+                );
+        })
+        .on('click', function (event, d) {
+            if (onSliceClick) {
+                onSliceClick(d.data.Outcome);
+            }
+        })
+        .on('mousemove', function (event) {
+            tooltip
+                .style('left', (event.pageX + 12) + 'px')
+                .style('top', (event.pageY - 28) + 'px');
+        })
+        .on('mouseout', function () {
+            d3.select(this)
+                .transition().duration(150)
+                .attr('d', arc);
+
+            tooltip.style('opacity', 0);
+        });
+
+    // Prozentlabels im Slice
+    arcs.append('text')
+        .attr('transform', d => `translate(${arc.centroid(d)})`)
+        .attr('dy', '.35em')
+        .style('font-weight', 'bold')
+        .style('fill', 'white')
+        .style('font-size', '14px')
+        .text(d => `${Math.round(d.data.count * 100 / total)}%`);
+}
+
+// Age Distribution Chart (0-10, 10-20, ..., 80+)
+function createAgeDistributionChart(selector, data) {
+    const svg = d3.select(selector)
+        .attr('width', 500)
+        .attr('height', 380)
+        .style('font-family', 'Segoe UI, sans-serif');
+
+    const margin = { top: 30, right: 20, bottom: 70, left: 60 };
+    const width = 500 - margin.left - margin.right;
+    const height = 380 - margin.top - margin.bottom;
+
+    const g = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const bins = [
+        { label: '0-10', min: 0, max: 10 },
+        { label: '10-20', min: 10, max: 20 },
+        { label: '20-30', min: 20, max: 30 },
+        { label: '30-40', min: 30, max: 40 },
+        { label: '40-50', min: 40, max: 50 },
+        { label: '50-60', min: 50, max: 60 },
+        { label: '60-70', min: 60, max: 70 },
+        { label: '70-80', min: 70, max: 80 },
+        { label: '80+', min: 80, max: Infinity }
+    ];
+
+    const grouped = bins.map(bin => {
+        const inBin = data.filter(d => {
+            const age = +d.Age;
+            return age >= bin.min && age < bin.max;
+        });
+        const diabetic = inBin.filter(d => String(d.Outcome) === '1').length;
+        const nonDiabetic = inBin.filter(d => String(d.Outcome) === '0').length;
+        return {
+            bin: bin.label,
+            diabetic,
+            nonDiabetic
+        };
+    });
+
+    const x0 = d3.scaleBand()
+        .domain(grouped.map(d => d.bin))
+        .range([0, width])
+        .padding(0.2);
+
+    const x1 = d3.scaleBand()
+        .domain(['nonDiabetic', 'diabetic'])
+        .range([0, x0.bandwidth()])
+        .padding(0.15);
+
+    const y = d3.scaleLinear()
+        .domain([0, d3.max(grouped, d => Math.max(d.diabetic, d.nonDiabetic)) || 0])
+        .range([height, 0])
+        .nice();
+
+    g.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x0))
+        .selectAll('text')
+        .style('font-size', '11px')
+        .attr('transform', 'rotate(-30)')
+        .style('text-anchor', 'end');
+
+    g.append('g')
+        .call(d3.axisLeft(y).ticks(5))
+        .selectAll('text')
+        .style('font-size', '11px');
+
+    const groups = g.selectAll('.age-group')
+        .data(grouped)
+        .enter()
+        .append('g')
+        .attr('class', 'age-group')
+        .attr('transform', d => `translate(${x0(d.bin)},0)`);
+
+    groups.append('rect')
+        .attr('x', d => x1('nonDiabetic'))
+        .attr('y', d => y(d.nonDiabetic))
+        .attr('width', x1.bandwidth())
+        .attr('height', d => height - y(d.nonDiabetic))
+        .attr('fill', 'var(--color-success)')
+        .attr('rx', 3);
+
+    groups.append('rect')
+        .attr('x', d => x1('diabetic'))
+        .attr('y', d => y(d.diabetic))
+        .attr('width', x1.bandwidth())
+        .attr('height', d => height - y(d.diabetic))
+        .attr('fill', 'var(--color-danger)')
+        .attr('rx', 3);
+
+    const legend = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top - 18})`);
+
+    legend.append('rect')
+        .attr('x', 0)
+        .attr('y', 0)
+        .attr('width', 10)
+        .attr('height', 10)
+        .attr('fill', 'var(--color-success)');
+
+    legend.append('text')
+        .attr('x', 16)
+        .attr('y', 9)
+        .style('font-size', '11px')
+        .text('Nicht-Diabetisch');
+
+    legend.append('rect')
+        .attr('x', 130)
+        .attr('y', 0)
+        .attr('width', 10)
+        .attr('height', 10)
+        .attr('fill', 'var(--color-danger)');
+
+    legend.append('text')
+        .attr('x', 146)
+        .attr('y', 9)
+        .style('font-size', '11px')
+        .text('Diabetisch');
+}
+       // 2. Feature Distributions (Histogram + KDE)
+function createFeatureDistributions(containerSelector, data, features) {
+    const container = d3.select(containerSelector);
+    container.selectAll('*').remove();
+
+    const cards = container.selectAll('.dist-card')
+        .data(features)
+        .enter()
+        .append('div')
+        .attr('class', 'dist-card');
+
+    cards.append('div')
+        .attr('class', 'dist-title')
+        .text(d => `Distribution: ${d}`);
+
+    cards.append('svg');
+
+    cards.each(function (feature) {
+        const svg = d3.select(this).select('svg');
+        createDistributionChart(svg, data, feature);
+    });
+
+    const remainder = features.length % 3;
+    if (remainder !== 0) {
+        const fillerCount = 3 - remainder;
+        const filler = container.selectAll('.dist-card.empty')
+            .data(d3.range(fillerCount))
+            .enter()
+            .append('div')
+            .attr('class', 'dist-card empty');
+        filler.append('div').attr('class', 'dist-title').text(' ');
+        filler.append('svg');
+    }
+}
+
+function createDistributionChart(svg, data, feature) {
+    const width = 260;
+    const height = 200;
+    const margin = { top: 10, right: 10, bottom: 35, left: 35 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    svg.attr('width', width).attr('height', height);
+
+    const values = data
+        .map(d => +d[feature])
+        .filter(v => !Number.isNaN(v));
+
+    const x = d3.scaleLinear()
+        .domain(d3.extent(values))
+        .nice()
+        .range([0, innerWidth]);
+
+    const bins = d3.bin()
+        .domain(x.domain())
+        .thresholds(20)(values);
+
+    const y = d3.scaleLinear()
+        .domain([0, d3.max(bins, d => d.length) || 0])
+        .nice()
+        .range([innerHeight, 0]);
+
+    const g = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    g.append('g')
+        .attr('transform', `translate(0,${innerHeight})`)
+        .call(d3.axisBottom(x).ticks(4))
+        .selectAll('text')
+        .style('font-size', '10px');
+
+    g.append('g')
+        .call(d3.axisLeft(y).ticks(4))
+        .selectAll('text')
+        .style('font-size', '10px');
+
+    g.selectAll('rect')
+        .data(bins)
+        .enter()
+        .append('rect')
+        .attr('x', d => x(d.x0) + 1)
+        .attr('y', d => y(d.length))
+        .attr('width', d => Math.max(0, x(d.x1) - x(d.x0) - 1))
+        .attr('height', d => innerHeight - y(d.length))
+        .attr('fill', 'var(--color-primary)');
+
+    const std = d3.deviation(values) || 1;
+    const bandwidth = Math.max(std * 0.6, (x.domain()[1] - x.domain()[0]) / 40);
+    const kernel = v => (1 / Math.sqrt(2 * Math.PI)) * Math.exp(-0.5 * v * v);
+    const xTicks = x.ticks(60);
+    const density = xTicks.map(t => {
+        const mean = d3.mean(values, v => kernel((t - v) / bandwidth)) || 0;
+        return [t, mean];
+    });
+    const maxBin = d3.max(bins, d => d.length) || 1;
+    const maxDensity = d3.max(density, d => d[1]) || 1;
+    const scaleFactor = maxBin / maxDensity;
+    density.forEach(d => { d[1] *= scaleFactor; });
+
+    const line = d3.line()
+        .curve(d3.curveBasis)
+        .x(d => x(d[0]))
+        .y(d => y(d[1]));
+
+    g.append('path')
+        .datum(density)
+        .attr('fill', 'none')
+        .attr('stroke', 'var(--color-primary)')
+        .attr('stroke-width', 1.5)
+        .attr('d', line);
+}
+
+        // 3. Correlation Heatmap (professionell, mit Tooltip)
+function createCorrelationHeatmap(selector, data) {
+  const svg = d3.select(selector)
+    .attr('width', 900)
+    .attr('height', 520);     
+
+  const margin = { top: 60, right: 20, bottom: 140, left: 100 };
+  const width  = 900 - margin.left - margin.right;
+  const height = 520 - margin.top - margin.bottom;
+    const g = svg.append('g')
+        .attr('class', 'corr-root')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Alle Features dynamisch aus CSV bestimmen
+    const features = Array.from(new Set(data.map(d => d.FeatureX)));
+
+    // Matrix aus CSV aufbauen
+    const matrix = features.map(f1 =>
+        features.map(f2 => {
+            const entry = data.find(d => d.FeatureX === f1 && d.FeatureY === f2);
+            return {
+                x: f2,
+                y: f1,
+                value: entry ? +entry.Correlation : 0
+            };
+        })
+    ).flat();
+
+    const x = d3.scaleBand()
+        .domain(features)
+        .range([0, width])
+        .padding(0.01);
+
+    const y = d3.scaleBand()
+        .domain(features)
+        .range([0, height])
+        .padding(0.01);
+
+    // Symmetrische Skala fuer -1..1 (kraeftiger Blau-Weiss-Rot Verlauf)
+    const z = d3.scaleDiverging()
+        .domain([-1, 0, 1])
+        .interpolator(d3.interpolateRgbBasis(['#2c7bb6', '#f7f7f7', '#d7191c']));
+
+    // Tooltip
+    let tooltip = d3.select('body').select('.tooltip-corr');
+    if (tooltip.empty()) {
+        tooltip = d3.select('body')
+            .append('div')
+            .attr('class', 'tooltip-corr')
+            .style('position', 'absolute')
+            .style('background', 'rgba(15,23,42,0.9)')
+            .style('color', '#fff')
+            .style('padding', '6px 10px')
+            .style('border-radius', '4px')
+            .style('font-size', '12px')
+            .style('pointer-events', 'none')
+            .style('opacity', 0);
+    }
+
+    // Zellen
+    g.selectAll('rect')
+        .data(matrix)
+        .enter()
+        .append('rect')
+        .attr('x', d => x(d.x))
+        .attr('y', d => y(d.y))
+        .attr('width', x.bandwidth())
+        .attr('height', y.bandwidth())
+        .attr('fill', d => z(d.value))
+        .attr('stroke', '#f9fafb')
+        .attr('stroke-width', 1)
+        .on('mouseover', function (event, d) {
+            d3.select(this)
+                .attr('stroke', '#000')
+                .attr('stroke-width', 2);
+
+            tooltip
+                .style('opacity', 1)
+                .html(
+                    `<strong>${d.y}</strong> ↔ <strong>${d.x}</strong><br>` +
+                    `Korrelation: ${d3.format('.3f')(d.value)}`
+                );
+        })
+        .on('mousemove', function (event) {
+            tooltip
+                .style('left', (event.pageX + 12) + 'px')
+                .style('top', (event.pageY - 28) + 'px');
+        })
+        .on('mouseout', function () {
+            d3.select(this)
+                .attr('stroke', '#f9fafb')
+                .attr('stroke-width', 1);
+
+            tooltip.style('opacity', 0);
+        });
+
+    // Zahlen in den Zellen (optional, bei vielen Features evtl. weglassen)
+    g.selectAll('.corr-text')
+        .data(matrix)
+        .enter()
+        .append('text')
+        .attr('class', 'corr-text')
+        .attr('x', d => x(d.x) + x.bandwidth() / 2)
+        .attr('y', d => y(d.y) + y.bandwidth() / 2)
+        .attr('text-anchor', 'middle')
+        .attr('dy', '0.35em')
+        .style('font-size', '10px')
+        .style('fill', d => Math.abs(d.value) > 0.5 ? '#fff' : '#111')
+        .text(d => d3.format('.2f')(d.value));
+
+    // Achsenbeschriftung unten
+    g.append('g')
+  .attr('transform', `translate(0,${height})`)
+  .call(d3.axisBottom(x).tickSize(0))
+  .selectAll('text')
+  .style('font-size', '12px')
+  .attr('transform', 'rotate(-45)')
+  .attr('text-anchor', 'end')
+  .attr('dy', '1.2em');   // kleinerer Wert, Labels höher
+
+        
+
+    // Achsenbeschriftung links
+    g.append('g')
+        .call(d3.axisLeft(y).tickSize(0))
+        .selectAll('text')
+        .style('font-size', '12px');
+
+    // Farbskala (Legende)
+    const legendWidth = 220;
+    const legendHeight = 10;
+
+    const legendX = d3.scaleLinear()
+        .domain([-1, 1])
+        .range([0, legendWidth]);
+
+    const legend = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top - 40})`);
+
+    const gradientId = 'corr-gradient';
+    const defs = svg.append('defs');
+    const gradient = defs.append('linearGradient')
+        .attr('id', gradientId)
+        .attr('x1', '0%').attr('y1', '0%')
+        .attr('x2', '100%').attr('y2', '0%');
+
+    gradient.append('stop').attr('offset', '0%').attr('stop-color', z(-1));
+    gradient.append('stop').attr('offset', '50%').attr('stop-color', z(0));
+    gradient.append('stop').attr('offset', '100%').attr('stop-color', z(1));
+
+    legend.append('rect')
+        .attr('width', legendWidth)
+        .attr('height', legendHeight)
+        .style('fill', `url(#${gradientId})`);
+
+    legend.append('g')
+        .attr('transform', `translate(0,${legendHeight})`)
+        .call(d3.axisBottom(legendX).ticks(5).tickFormat(d3.format('.1f')))
+        .selectAll('text')
+        .style('font-size', '10px');
+
+    legend.append('text')
+        .attr('x', legendWidth / 2)
+        .attr('y', -6)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '11px')
+        .style('fill', '#4b5563')
+        .text('Korrelationskoeffizient');
+}
+
+     // 4. PCA Scatter Plot (mit Tooltip, Achsentiteln, sauberer Skala)
+
+function normalizeOutcome(value) {
+    if (value == null) {
+        return null;
+    }
+    const num = Number(value);
+    if (Number.isNaN(num)) {
+        return String(value).trim();
+    }
+    return String(num);
+}
+
+function createPCAScatter(selector, data, varianceData, options = {}) {
+    const width = options.width || 460;
+    const height = options.height || 420;
+    const legendPosition = options.legendPosition || 'right';
+    const onClusterClick = options.onClusterClick || null;
+    const svg = d3.select(selector)
+        .attr('width', width)
+        .attr('height', height)
+        .style('font-family', 'Segoe UI, sans-serif');
+
+    svg.selectAll('*').remove();
+
+    const margin = { top: 40, right: 20, bottom: 60, left: 70 };
+    const innerWidth  = width - margin.left - margin.right;
+    const innerHeight = height - margin.top  - margin.bottom;
+
+    const g = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // Skalen (kleiner Puffer, damit Punkte nicht am Rand kleben)
+    const xExtent = d3.extent(data, d => +d.PC1);
+    const yExtent = d3.extent(data, d => +d.PC2);
+
+    const x = d3.scaleLinear()
+        .domain([xExtent[0] * 1.05, xExtent[1] * 1.05])
+        .range([0, innerWidth]);
+
+    const y = d3.scaleLinear()
+        .domain([yExtent[0] * 1.05, yExtent[1] * 1.05])
+        .range([innerHeight, 0]);
+
+    const clusters = Array.from(new Set(data.map(d => d.Cluster)));
+    const color = d3.scaleOrdinal()
+        .domain(clusters)
+        .range(d3.schemeCategory10);
+
+    // Tooltip
+    let tooltip = d3.select('body').select('.tooltip-pca');
+    if (tooltip.empty()) {
+        tooltip = d3.select('body')
+            .append('div')
+            .attr('class', 'tooltip-pca')
+            .style('position', 'absolute')
+            .style('background', 'rgba(15,23,42,0.9)')
+            .style('color', '#fff')
+            .style('padding', '6px 10px')
+            .style('border-radius', '4px')
+            .style('font-size', '12px')
+            .style('pointer-events', 'none')
+            .style('opacity', 0);
+    }
+
+    // Achsen
+    g.append('g')
+        .attr('transform', `translate(0,${innerHeight})`)
+        .call(d3.axisBottom(x).ticks(6))
+        .selectAll('text')
+        .style('font-size', '11px');
+
+    g.append('g')
+        .call(d3.axisLeft(y).ticks(6))
+        .selectAll('text')
+        .style('font-size', '11px');
+
+    // Achsentitel
+    g.append('text')
+        .attr('x', innerWidth / 2)
+        .attr('y', innerHeight + 40)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '12px')
+        .style('fill', '#4b5563')
+        .text('PC1');
+
+    g.append('text')
+        .attr('transform', 'rotate(-90)')
+        .attr('x', -innerHeight / 2)
+        .attr('y', -50)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '12px')
+        .style('fill', '#4b5563')
+        .text('PC2');
+
+    // Legende fuer Cluster
+    if (legendPosition === 'bottom') {
+        const itemWidth = 90;
+        const legendWidth = clusters.length * itemWidth;
+        const legend = svg.append('g')
+            .attr('transform', `translate(${margin.left + (innerWidth - legendWidth) / 2},${margin.top + innerHeight + 20})`);
+
+        clusters.forEach((c, i) => {
+            const row = legend.append('g')
+                .attr('transform', `translate(${i * itemWidth},0)`);
+
+            row.append('rect')
+                .attr('width', 10)
+                .attr('height', 10)
+                .attr('fill', color(c));
+
+            row.append('text')
+                .attr('x', 16)
+                .attr('y', 9)
+                .style('font-size', '11px')
+                .text(`Cluster ${c}`);
+        });
+    } else {
+        const legend = svg.append('g')
+            .attr('transform', `translate(${innerWidth + margin.left - 80},${margin.top})`);
+
+        clusters.forEach((c, i) => {
+            const row = legend.append('g')
+                .attr('transform', `translate(0,${i * 18})`);
+
+            row.append('rect')
+                .attr('width', 10)
+                .attr('height', 10)
+                .attr('fill', color(c));
+
+            row.append('text')
+                .attr('x', 16)
+                .attr('y', 9)
+                .style('font-size', '11px')
+                .text(`Cluster ${c}`);
+        });
+    }
+
+    // Varianz-Annotation
+    const pc1Var = +varianceData[0]?.ExplainedVariance || 0.45;
+    const pc2Var = +varianceData[1]?.ExplainedVariance || 0.20;
+
+    svg.append('text')
+        .attr('x', margin.left)
+        .attr('y', 20)
+        .style('font-size', '13px')
+        .style('font-weight', 'bold')
+        .style('fill', 'var(--color-primary)')
+        .text(`PC1 Varianz: ${pc1Var.toFixed(1)}%, PC2: ${pc2Var.toFixed(1)}%`);
+
+    svg.node().__pca__ = { data, x, y, color, g, tooltip, innerWidth, innerHeight, onClusterClick };
+
+    updatePCAScatter(selector, null);
+}
+
+function updatePCAScatter(selector, outcomeFilter) {
+    const svg = d3.select(selector);
+    const state = svg.node().__pca__;
+    if (!state) {
+        return;
+    }
+
+    const { data, x, y, color, g, tooltip, onClusterClick } = state;
+    const normalized = normalizeOutcome(outcomeFilter);
+    const allData = data;
+    const isActive = d => normalized == null || normalizeOutcome(d.Outcome) === normalized;
+
+    const points = g.selectAll('.point')
+        .data(allData, d => `${d.PC1}-${d.PC2}-${d.Cluster}-${d.Outcome}`);
+
+    points.exit()
+        .transition().duration(150)
+        .attr('r', 0)
+        .remove();
+
+    const pointsEnter = points.enter()
+        .append('circle')
+        .attr('class', 'point')
+        .attr('cx', d => x(+d.PC1))
+        .attr('cy', d => y(+d.PC2))
+        .attr('r', 0)
+        .attr('fill', d => isActive(d) ? color(d.Cluster) : '#d1d5db')
+        .attr('opacity', d => isActive(d) ? 0.8 : 0.35)
+        .style('cursor', onClusterClick ? 'pointer' : 'default')
+        .on('mouseover', function (event, d) {
+            d3.select(this)
+                .transition().duration(150)
+                .attr('r', 6)
+                .attr('opacity', 1);
+
+            tooltip
+                .style('opacity', 1)
+                .html(
+                    `<strong>Cluster:</strong> ${d.Cluster}<br>` +
+                    `PC1: ${d3.format('.2f')(+d.PC1)}<br>` +
+                    `PC2: ${d3.format('.2f')(+d.PC2)}`
+                );
+        })
+        .on('mousemove', function (event) {
+            tooltip
+                .style('left', (event.pageX + 12) + 'px')
+                .style('top',  (event.pageY - 28) + 'px');
+        })
+        .on('mouseout', function () {
+            d3.select(this)
+                .transition().duration(150)
+                .attr('r', 4)
+                .attr('opacity', 0.75);
+
+            tooltip.style('opacity', 0);
+        })
+        .on('click', function (event, d) {
+            if (onClusterClick) {
+                onClusterClick(String(d.Cluster));
+            }
+        });
+
+    pointsEnter.merge(points)
+        .transition().duration(200)
+        .attr('cx', d => x(+d.PC1))
+        .attr('cy', d => y(+d.PC2))
+        .attr('r', 4)
+        .attr('fill', d => isActive(d) ? color(d.Cluster) : '#d1d5db')
+        .attr('opacity', d => isActive(d) ? 0.8 : 0.35);
+
+    if (normalized != null) {
+        g.selectAll('.point')
+            .sort((a, b) => (isActive(a) === isActive(b)) ? 0 : isActive(a) ? 1 : -1);
+    }
+}
+
+function createConfusionMatrix(selector, data) {
+    const svg = d3.select(selector)
+        .attr('width', 460)
+        .attr('height', 420)
+        .style('font-family', 'Segoe UI, sans-serif');
+
+    const margin = { top: 50, right: 20, bottom: 60, left: 80 };
+    const width  = 460 - margin.left - margin.right;
+    const height = 420 - margin.top  - margin.bottom;
+
+    const g = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // >>> Werte direkt aus deiner CSV-Struktur
+    // Zeile für Actual_0
+    const row0 = data.find(d => d.index === 'Actual_0') || {};
+    // Zeile für Actual_1
+    const row1 = data.find(d => d.index === 'Actual_1') || {};
+
+    const tn = +row0.Pred_0 || 0; // Actual_0, Pred_0
+    const fp = +row0.Pred_1 || 0; // Actual_0, Pred_1
+    const fn = +row1.Pred_0 || 0; // Actual_1, Pred_0
+    const tp = +row1.Pred_1 || 0; // Actual_1, Pred_1
+    // <<<
+
+    const matrix = [
+        [{ value: tn, actual: 0, predicted: 0, label: 'TN' },
+         { value: fp, actual: 0, predicted: 1, label: 'FP' }],
+        [{ value: fn, actual: 1, predicted: 0, label: 'FN' },
+         { value: tp, actual: 1, predicted: 1, label: 'TP' }]
+    ];
+
+    const labelsPred = ['Predicted 0', 'Predicted 1'];
+    const labelsAct  = ['Actual 0', 'Actual 1'];
+
+    const cellSize = Math.min(width, height) / 2;
+    const color = d3.scaleSequential(d3.interpolateReds)
+        .domain([0, d3.max(matrix.flat().map(d => d.value)) || 1]);
+
+    // Tooltip
+    let tooltip = d3.select('body').select('.tooltip-cm');
+    if (tooltip.empty()) {
+        tooltip = d3.select('body')
+            .append('div')
+            .attr('class', 'tooltip-cm')
+            .style('position', 'absolute')
+            .style('background', 'rgba(15,23,42,0.9)')
+            .style('color', '#fff')
+            .style('padding', '6px 10px')
+            .style('border-radius', '4px')
+            .style('font-size', '12px')
+            .style('pointer-events', 'none')
+            .style('opacity', 0);
+    }
+
+    const cells = g.selectAll('.cell-row')
+        .data(matrix)
+        .enter()
+        .append('g')
+        .attr('class', 'cell-row')
+        .attr('transform', (d, i) => `translate(0, ${i * cellSize})`);
+
+    cells.selectAll('.cell')
+        .data(d => d)
+        .enter()
+        .append('g')
+        .attr('class', 'cell')
+        .attr('transform', (d, j) => `translate(${j * cellSize}, 0)`)
+        .each(function (d) {
+            const cell = d3.select(this);
+
+            cell.append('rect')
+                .attr('width', cellSize)
+                .attr('height', cellSize)
+                .attr('fill', color(d.value))
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 2)
+                .on('mouseover', function (event) {
+                    d3.select(this)
+                        .attr('stroke', '#000')
+                        .attr('stroke-width', 3);
+
+                    tooltip
+                        .style('opacity', 1)
+                        .html(
+                            `<strong>${d.label}</strong><br>` +
+                            `Actual: ${d.actual}<br>` +
+                            `Predicted: ${d.predicted}<br>` +
+                            `Wert: ${d.value}`
+                        );
+                })
+                .on('mousemove', function (event) {
+                    tooltip
+                        .style('left', (event.pageX + 12) + 'px')
+                        .style('top',  (event.pageY - 28) + 'px');
+                })
+                .on('mouseout', function () {
+                    d3.select(this)
+                        .attr('stroke', '#fff')
+                        .attr('stroke-width', 2);
+
+                    tooltip.style('opacity', 0);
+                });
+
+            cell.append('text')
+                .attr('x', cellSize / 2)
+                .attr('y', cellSize / 2 - 4)
+                .attr('text-anchor', 'middle')
+                .style('font-size', '18px')
+                .style('font-weight', 'bold')
+                .style('fill', d.value > (d3.max(matrix.flat().map(x => x.value)) / 2) ? '#fff' : '#111')
+                .text(d.value);
+
+            cell.append('text')
+                .attr('x', cellSize / 2)
+                .attr('y', cellSize / 2 + 16)
+                .attr('text-anchor', 'middle')
+                .style('font-size', '11px')
+                .style('fill', '#fff')
+                .text(d.label);
+        });
+
+    g.append('g').selectAll('.x-label')
+        .data(labelsPred)
+        .enter()
+        .append('text')
+        .attr('x', (d, i) => i * cellSize + cellSize / 2)
+        .attr('y', -10)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '12px')
+        .style('font-weight', '600')
+        .text(d => d);
+
+    g.append('g').selectAll('.y-label')
+        .data(labelsAct)
+        .enter()
+        .append('text')
+        .attr('x', -12)
+        .attr('y', (d, i) => i * cellSize + cellSize / 2)
+        .attr('text-anchor', 'end')
+        .style('font-size', '12px')
+        .style('font-weight', '600')
+        .text(d => d);
+
+    svg.append('text')
+        .attr('x', margin.left + cellSize)
+        .attr('y', 24)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '14px')
+        .style('font-weight', 'bold')
+        .style('fill', '#111827')
+        .text('Confusion Matrix (Actual vs. Predicted)');
+}
+
+function createBaselineMetrics(containerSelector, data) {
+    const container = d3.select(containerSelector);
+    if (!container.node()) {
+        return;
+    }
+
+    const dataRows = data.map(d => ({
+        label: d[''],
+        precision: +d['precision'],
+        recall: +d['recall'],
+        f1: +d['f1-score'],
+        support: +d['support'],
+        accuracy: d['accuracy'] === '' ? null : +d['accuracy']
+    }));
+
+    const class0 = dataRows.find(d => d.label === '0.0');
+    const class1 = dataRows.find(d => d.label === '1.0');
+    const macroRow = dataRows.find(d => d.label === 'macro avg');
+    const accuracyRow = dataRows.find(d => d.label === 'accuracy');
+
+    const totalSupport = (class0?.support || 0) + (class1?.support || 0);
+    const weighted = {
+        precision: totalSupport ? ((class0.precision * class0.support) + (class1.precision * class1.support)) / totalSupport : 0,
+        recall: totalSupport ? ((class0.recall * class0.support) + (class1.recall * class1.support)) / totalSupport : 0,
+        f1: totalSupport ? ((class0.f1 * class0.support) + (class1.f1 * class1.support)) / totalSupport : 0,
+        support: totalSupport
+    };
+
+    const accuracy = accuracyRow?.precision ?? accuracyRow?.recall ?? accuracyRow?.f1 ?? null;
+
+    const fmt2 = d3.format('.2f');
+    const fmt6 = d3.format('.6f');
+    const fmtSupport = value => (value == null ? '' : Math.round(value));
+    const cell = value => (value == null || value === '' ? '' : fmt2(value));
+
+    const rows = [];
+    if (class0) {
+        rows.push({ label: '0.0 ', precision: class0.precision, recall: class0.recall, f1: class0.f1, support: class0.support });
+    }
+    if (class1) {
+        rows.push({ label: '1.0 ', precision: class1.precision, recall: class1.recall, f1: class1.f1, support: class1.support });
+    }
+    if (accuracy != null) {
+        rows.push({ label: 'accuracy', precision: '', recall: '', f1: accuracy, support: totalSupport, highlight: true });
+    }
+    if (macroRow) {
+        rows.push({ label: 'macro avg', precision: macroRow.precision, recall: macroRow.recall, f1: macroRow.f1, support: macroRow.support || totalSupport });
+    }
+    rows.push({ label: 'weighted avg', precision: weighted.precision, recall: weighted.recall, f1: weighted.f1, support: weighted.support });
+
+    const tableRows = rows.map(row => (
+        `<tr class="${row.highlight ? 'baseline-highlight' : ''}">` +
+        `<td>${row.label}</td>` +
+        `<td>${cell(row.precision)}</td>` +
+        `<td>${cell(row.recall)}</td>` +
+        `<td>${cell(row.f1)}</td>` +
+        `<td>${fmtSupport(row.support)}</td>` +
+        `</tr>`
+    )).join('');
+
+    const chips = [];
+    if (accuracy != null) {
+        chips.push(`<div class="baseline-chip"><span>Accuracy</span><strong>${fmt6(accuracy)}</strong></div>`);
+    }
+    if (class1) {
+        chips.push(`<div class="baseline-chip"><span>Precision</span><strong>${fmt6(class1.precision)}</strong></div>`);
+        chips.push(`<div class="baseline-chip"><span>Recall</span><strong>${fmt6(class1.recall)}</strong></div>`);
+        chips.push(`<div class="baseline-chip"><span>F1 Score</span><strong>${fmt6(class1.f1)}</strong></div>`);
+    }
+
+    const html = [
+        `<div class="baseline-report">`,
+        `<div class="baseline-title">Baseline Modell (ohne Cluster)</div>`,
+        `<table class="baseline-table">`,
+        `<thead><tr><th>Klasse</th><th>Precision</th><th>Recall</th><th>F1-Score</th><th>Support</th></tr></thead>`,
+        `<tbody>${tableRows}</tbody>`,
+        `</table>`,
+        chips.length ? `<div class="baseline-meta">${chips.join('')}</div>` : '',
+        `</div>`
+    ].join('');
+
+    container.html(html);
+}
+
+function updateClusterProfile(containerSelector, explainerSelector, modalSelector, profileMap, clusterId) {
+    const container = d3.select(containerSelector);
+    const explainer = d3.select(explainerSelector);
+    const modal = d3.select(modalSelector);
+    if (!container.node()) {
+        return;
+    }
+
+    if (!clusterId || !profileMap || !profileMap.has(clusterId)) {
+        container.html('<div class="baseline-report">Klicke auf einen Punkt im PCA Chart, um das Cluster-Profil zu sehen.</div>');
+        if (!explainer.empty()) {
+            explainer.text('');
+        }
+        return;
+    }
+
+    const row = profileMap.get(clusterId);
+    const features = [
+        'Pregnancies',
+        'Glucose',
+        'BloodPressure',
+        'SkinThickness',
+        'Insulin',
+        'BMI',
+        'DiabetesPedigreeFunction',
+        'Age'
+    ];
+
+    const fmt = d3.format('.2f');
+    const rows = features.map(feature => {
+        const value = +row[feature];
+        return `<tr><td>${feature}</td><td>${fmt(value)}</td></tr>`;
+    }).join('');
+
+    const html = [
+        `<table>`,
+        `<thead><tr><th>Cluster ${clusterId} Profil</th><th>Wert (0-1)</th></tr></thead>`,
+        `<tbody>${rows}</tbody>`,
+        `</table>`
+    ].join('');
+
+    container.html(html);
+    if (!explainer.empty()) {
+        explainer.text('Ein Cluster ist eine Gruppe von Punkten, die im PCA-Raum nah beieinander liegen. Die Zuordnung passiert durch das KMeans-Cluster (Spalte "Cluster" in den Daten). Das Profil zeigt die normalisierten Durchschnittswerte der Features dieses Clusters (0 bis 1).');
+    }
+    if (!modal.empty()) {
+        modal.classed('active', true);
+    }
+}
+
+
+      // 6. KMeans Elbow & Silhouette Chart (mit Tooltips & 2 Y-Achsen)
+function createKMeansChart(selector, data) {
+    const svg = d3.select(selector)
+        .attr('width', 460)
+        .attr('height', 420)
+        .style('font-family', 'Segoe UI, sans-serif');
+
+    const margin = { top: 40, right: 60, bottom: 60, left: 70 };
+    const width  = 460 - margin.left - margin.right;
+    const height = 420 - margin.top  - margin.bottom;
+
+    const g = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top})`);
+
+    // X: k
+    const ks = data.map(d => +d.k);
+    const x = d3.scaleLinear()
+        .domain([d3.min(ks), d3.max(ks)])
+        .range([0, width]);
+
+    // Y1: SSE
+    const ySSE = d3.scaleLinear()
+        .domain([0, d3.max(data, d => +d.SSE)])
+        .range([height, 0])
+        .nice();
+
+    // Y2: Silhouette
+    const ySil = d3.scaleLinear()
+        .domain([0, 1])
+        .range([height, 0]);
+
+    // Tooltip
+    let tooltip = d3.select('body').select('.tooltip-kmeans');
+    if (tooltip.empty()) {
+        tooltip = d3.select('body')
+            .append('div')
+            .attr('class', 'tooltip-kmeans')
+            .style('position', 'absolute')
+            .style('background', 'rgba(15,23,42,0.9)')
+            .style('color', '#fff')
+            .style('padding', '6px 10px')
+            .style('border-radius', '4px')
+            .style('font-size', '12px')
+            .style('pointer-events', 'none')
+            .style('opacity', 0);
+    }
+
+    // Linien
+    const lineSSE = d3.line()
+        .x(d => x(+d.k))
+        .y(d => ySSE(+d.SSE));
+
+    const lineSil = d3.line()
+        .x(d => x(+d.k))
+        .y(d => ySil(+d.Silhouette));
+
+    // SSE Line
+    g.append('path')
+        .datum(data)
+        .attr('fill', 'none')
+        .attr('stroke', 'var(--color-primary)')
+        .attr('stroke-width', 3)
+        .attr('d', lineSSE);
+
+    // Silhouette Line
+    g.append('path')
+        .datum(data)
+        .attr('fill', 'none')
+        .attr('stroke', 'var(--color-danger)')
+        .attr('stroke-width', 3)
+        .style('stroke-dasharray', '4 3')
+        .attr('d', lineSil);
+
+    // Punkte SSE
+    g.selectAll('.dot-sse')
+        .data(data)
+        .enter()
+        .append('circle')
+        .attr('class', 'dot-sse')
+        .attr('cx', d => x(+d.k))
+        .attr('cy', d => ySSE(+d.SSE))
+        .attr('r', 4)
+        .attr('fill', 'var(--color-primary)')
+        .on('mouseover', function (event, d) {
+            d3.select(this).transition().duration(150).attr('r', 6);
+
+            tooltip
+                .style('opacity', 1)
+                .html(
+                    `<strong>k = ${d.k}</strong><br>` +
+                    `SSE: ${d3.format('.0f')(+d.SSE)}<br>` +
+                    `Silhouette: ${d3.format('.3f')(+d.Silhouette)}`
+                );
+        })
+        .on('mousemove', function (event) {
+            tooltip
+                .style('left', (event.pageX + 12) + 'px')
+                .style('top',  (event.pageY - 28) + 'px');
+        })
+        .on('mouseout', function () {
+            d3.select(this).transition().duration(150).attr('r', 4);
+            tooltip.style('opacity', 0);
+        });
+
+    // Punkte Silhouette
+    g.selectAll('.dot-sil')
+        .data(data)
+        .enter()
+        .append('circle')
+        .attr('class', 'dot-sil')
+        .attr('cx', d => x(+d.k))
+        .attr('cy', d => ySil(+d.Silhouette))
+        .attr('r', 4)
+        .attr('fill', 'var(--color-danger)')
+        .on('mouseover', function (event, d) {
+            d3.select(this).transition().duration(150).attr('r', 6);
+
+            tooltip
+                .style('opacity', 1)
+                .html(
+                    `<strong>k = ${d.k}</strong><br>` +
+                    `SSE: ${d3.format('.0f')(+d.SSE)}<br>` +
+                    `Silhouette: ${d3.format('.3f')(+d.Silhouette)}`
+                );
+        })
+        .on('mousemove', function (event) {
+            tooltip
+                .style('left', (event.pageX + 12) + 'px')
+                .style('top',  (event.pageY - 28) + 'px');
+        })
+        .on('mouseout', function () {
+            d3.select(this).transition().duration(150).attr('r', 4);
+            tooltip.style('opacity', 0);
+        });
+
+    // Achsen
+    g.append('g')
+        .attr('transform', `translate(0,${height})`)
+        .call(d3.axisBottom(x).ticks(data.length))
+        .selectAll('text')
+        .style('font-size', '11px');
+
+    g.append('g')
+        .call(d3.axisLeft(ySSE).ticks(5))
+        .selectAll('text')
+        .style('font-size', '11px');
+
+    // Rechte Y-Achse für Silhouette
+    g.append('g')
+        .attr('transform', `translate(${width},0)`)
+        .call(d3.axisRight(ySil).ticks(5))
+        .selectAll('text')
+        .style('font-size', '11px');
+
+    // Achsentitel
+    g.append('text')
+        .attr('x', innerWidth / 2)
+        .attr('y', innerHeight + 40)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '12px')
+        .style('fill', '#4b5563')
+        .text('Anzahl Cluster k');
+
+    g.append('text')
+        .attr('transform', 'rotate(-90)')
+        .attr('x', -innerHeight / 2)
+        .attr('y', -50)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '12px')
+        .style('fill', 'var(--color-primary)')
+        .text('SSE');
+
+    g.append('text')
+        .attr('transform', 'rotate(-90)')
+        .attr('x', -innerHeight / 2)
+        .attr('y', width + 45)
+        .attr('text-anchor', 'middle')
+        .style('font-size', '12px')
+        .style('fill', 'var(--color-danger)')
+        .text('Silhouette Score');
+
+    // Legende
+    const legend = svg.append('g')
+        .attr('transform', `translate(${margin.left},${margin.top - 15})`);
+
+    const items = [
+        { label: 'SSE', color: 'var(--color-primary)', dash: '0' },
+        { label: 'Silhouette', color: 'var(--color-danger)', dash: '4 3' }
+    ];
+
+    items.forEach((item, i) => {
+        const gItem = legend.append('g')
+            .attr('transform', `translate(${i * 120},0)`);
+
+        gItem.append('line')
+            .attr('x1', 0)
+            .attr('y1', 0)
+            .attr('x2', 20)
+            .attr('y2', 0)
+            .attr('stroke', item.color)
+            .attr('stroke-width', 3)
+            .style('stroke-dasharray', item.dash);
+
+        gItem.append('circle')
+            .attr('cx', 10)
+            .attr('cy', 0)
+            .attr('r', 3)
+            .attr('fill', item.color);
+
+        gItem.append('text')
+            .attr('x', 26)
+            .attr('y', 4)
+            .style('font-size', '11px')
+            .text(item.label);
+    });
+}
+
+
+        // Initialisierung
+        window.onload = loadData;
+    </script>
+</body>
+</html>
+
