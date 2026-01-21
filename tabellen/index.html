@@ -157,7 +157,7 @@
         <div class="stats-grid" id="stats-grid">
             <div class="stat-card">
                 <div class="stat-value" id="total-patients">-</div>
-                <div class="stat-label">Gesamte Patienten</div>
+                <div class="stat-label">Gesamte Patienten (Frauen)</div>
             </div>
             <div class="stat-card success">
                 <div class="stat-value" id="non-diabetic">-</div>
@@ -249,19 +249,24 @@
         </div>
 
         <!-- Key Insights -->
+<div class="insights">
+    <h3>Wichtigste Erkenntnisse für ML</h3>
+    <ul id="insights-list">
+        <li><strong>Glucose</strong>: Stärkster Prädiktor. Essenziell für alle Modelle.</li>
+        <li><strong>BMI</strong>: Zweitwichtigster Faktor. Hohe Werte erhöhen das Risiko.</li>
+        <li><strong>Age</strong>: Moderate Korrelation. Ältere Patientinnen sind häufiger betroffen.</li>
+        <li><strong>Klassen-Imbalance</strong>: 65 % vs 35 %. SMOTE oder Class Weights beim Training sinnvoll.</li>
+        <li><strong>KMeans Elbow</strong>: Bestimmt sinnvolle Clusteranzahl über Abstandsreduktion.</li>
+        <li><strong>Silhouette Score</strong>: Bewertet Trennung und Qualität der Cluster.</li>
+        <li><strong>PCA</strong>: Dimensionsreduktion auf 2 bis 3 Komponenten möglich. Gute Struktur, keine perfekte Trennung.</li>
+        <li><strong>Random Forest</strong>: Hohe Accuracy durch Ensemble-Ansatz. Feature Importance gut interpretierbar.</li>
+        <li><strong>Precision</strong>: Zeigt, wie zuverlässig positive Diabetes-Vorhersagen sind.</li>
+        <li><strong>Recall</strong>: Misst, wie viele tatsächliche Diabetes-Fälle erkannt werden.</li>
+        <li><strong>F1-Score</strong>: Balance zwischen Precision und Recall.</li>
+        <li><strong>Support</strong>: Anzahl der Samples pro Klasse.</li>
+    </ul>
+</div>
 
-        <div class="insights">
-            <h3>Wichtigste Erkenntnisse für ML</h3>
-            <ul id="insights-list">
-                <li><strong>Glucose</strong>: Stärkster Prädiktor (Korrelation 0.47) – Essentiell für Modelle</li>
-                <li><strong>BMI</strong>: Zweiter Faktor (Korrelation 0.29) – Hohe BMI-Werte erhöhen Risiko</li>
-                <li><strong>Age</strong>: Moderate Korrelation (0.24) – Ältere Patienten gefährdeter</li>
-                <li><strong>Klassen-Imbalance</strong>: 65% vs 35% – SMOTE/Class Weights bei Training nutzen</li>
-                <li><strong>PCA</strong>: PC1 erklärt ~45% Varianz – Reduktion auf 2-3 Komponenten möglich</li>
-                <li><strong>Random Forest</strong>: Hohe Accuracy durch Ensemble-Methode – Feature Importance visualisieren</li>
-            </ul>
-        </div>
-    </div>
 
     <script>
         // Daten laden und Visualisierungen initialisieren
@@ -971,8 +976,8 @@ function createPCAScatter(selector, data, varianceData, options = {}) {
 
     // Achsentitel
     g.append('text')
-        .attr('x', innerWidth / 2)
-        .attr('y', innerHeight + 40)
+        .attr('x', width / 2)
+        .attr('y', height + 40)
         .attr('text-anchor', 'middle')
         .style('font-size', '12px')
         .style('fill', '#4b5563')
@@ -980,7 +985,7 @@ function createPCAScatter(selector, data, varianceData, options = {}) {
 
     g.append('text')
         .attr('transform', 'rotate(-90)')
-        .attr('x', -innerHeight / 2)
+        .attr('x', -height / 2)
         .attr('y', -50)
         .attr('text-anchor', 'middle')
         .style('font-size', '12px')
@@ -1419,7 +1424,7 @@ function createKMeansChart(selector, data) {
         .attr('height', 420)
         .style('font-family', 'Segoe UI, sans-serif');
 
-    const margin = { top: 40, right: 60, bottom: 60, left: 70 };
+    const margin = { top: 40, right: 60, bottom: 60, left: 110 };
     const width  = 460 - margin.left - margin.right;
     const height = 420 - margin.top  - margin.bottom;
 
@@ -1568,8 +1573,8 @@ function createKMeansChart(selector, data) {
 
     // Achsentitel
     g.append('text')
-        .attr('x', innerWidth / 2)
-        .attr('y', innerHeight + 40)
+        .attr('x', width / 2)
+        .attr('y', height + 40)
         .attr('text-anchor', 'middle')
         .style('font-size', '12px')
         .style('fill', '#4b5563')
@@ -1577,16 +1582,16 @@ function createKMeansChart(selector, data) {
 
     g.append('text')
         .attr('transform', 'rotate(-90)')
-        .attr('x', -innerHeight / 2)
-        .attr('y', -50)
+        .attr('x', -height / 2)
+        .attr('y', -80)
         .attr('text-anchor', 'middle')
         .style('font-size', '12px')
         .style('fill', 'var(--color-primary)')
-        .text('SSE');
+        .text('SSE (Sum of Squared Errors)');
 
     g.append('text')
         .attr('transform', 'rotate(-90)')
-        .attr('x', -innerHeight / 2)
+        .attr('x', -height / 2)
         .attr('y', width + 45)
         .attr('text-anchor', 'middle')
         .style('font-size', '12px')
